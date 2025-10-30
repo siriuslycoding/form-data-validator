@@ -2,104 +2,112 @@ import re
 from pdf2image import convert_from_path
 import pytesseract
 
-# --- Optional: If Tesseract isn't in your system's PATH ---
-# On Windows, you might need this:
+# Optional if Tesseract is not in PATH:
 # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 
 def process_document(pdf_path, form_data):
     """
-    Validates a PDF document against data from a form.
-
-    :param pdf_path: The file path to the uploaded PDF.
-    :param form_data: A dictionary of data from the Google Form.
-                      (e.g., {'name': 'John Doe', 'id_number': '12345678', 'doc_type': 'Aadhaar Card'})
-    :return: A dictionary with the validation status and result.
+    Validates a single PDF document against its expected form data.
     """
-    
-    print(f"Processing document for: {form_data.get('name')}")
+    print(f"\n📄 Processing {form_data.get('doc_type')} for {form_data.get('name')}")
 
     try:
-        # 1. Convert PDF to a list of images
         images = convert_from_path(pdf_path)
     except Exception as e:
-        print(f"Error converting PDF: {e}")
-        return {'status': f"Error: Could not read PDF file. {e}", 'validation_passed': False}
+        return {'doc_type': form_data.get('doc_type'),
+                'status': f"Error: Could not read PDF file. {e}",
+                'validation_passed': False}
 
     full_text = ""
     for img in images:
-        # 2. Use Tesseract to get text from each image
-        # full_text += pytesseract.image_to_string(img)
-        
-        # Tell Tesseract to look for BOTH English ('eng') and Hindi ('hin')
         full_text += pytesseract.image_to_string(img, lang='eng+hin')
-    
-    # Normalize text for easier matching (all lowercase)
+
     full_text = full_text.lower()
-    print("--- TESSERACT'S OUTPUT ---")
-    print(full_text)
-    print("----------------------------")
-
-    # --- 3. PERFORM VALIDATION LOGIC ---
-    
-    # Get form data, using .get() to avoid errors if a field is missing
     name_from_form = form_data.get('name', '').lower()
-    id_from_form = form_data.get('id_number', '').lower()
-    expected_doc_type = form_data.get('doc_type', '').lower() # e.g., "aadhar card"
 
-    # Validation 1: Check if the document type keyword exists
-    if expected_doc_type == 'aadhaar card':
-        # Look for EITHER the English word OR the Hindi word
-        if 'aadhaar' not in full_text and 'आधार' not in full_text:
-            print(f"Validation FAILED: Keyword 'aadhaar' or 'आधार' not found.")
-            return {
-                'status': f"Mismatch ❌: Document does not seem to be an '{expected_doc_type}'.",
-                'validation_passed': False
-            }
-    # (Optional) You can add 'else if' blocks here for 'pan card', etc.
+    # Flexible identifier field names
+    id_field = form_data.get('id_number') or form_data.get('roll_number') or form_data.get('registration_number')
+    id_field = (id_field or '').lower().replace(' ', '')
+    expected_doc_type = form_data.get('doc_type', '').lower()
 
-    # Validation 2: Check if the Name from the form is in the document
-    # Note: This is a simple check. Regex is better for specific fields.
+    # --- Document-specific validation rules ---
+    doc_rules = {
+        'aadhaar card': ['aadhaar', 'आधार'],
+        'pan card': ['income tax department', 'permanent account number', 'pan'],
+        'marksheet': ['marksheet', 'grade', 'university', 'board'],
+        'birth certificate': ['birth certificate', 'date of birth', 'dob']
+    }
+
+    # Check document keyword
+    keywords = doc_rules.get(expected_doc_type, [])
+    if not any(k in full_text for k in keywords):
+        return {'doc_type': expected_doc_type,
+                'status': f"Mismatch: '{expected_doc_type}' keywords not found.",
+                'validation_passed': False}
+
+    # Check name
     if name_from_form and name_from_form not in full_text:
-        print(f"Validation FAILED: Name '{name_from_form}' not found.")
-        return {
-            'status': f"Mismatch ❌: Name '{name_from_form}' not found in the document.",
-            'validation_passed': False
-        }
+        return {'doc_type': expected_doc_type,
+                'status': f"Mismatch: Name '{name_from_form}' not found.",
+                'validation_passed': False}
 
-    # Validation 3: Check if the ID Number from the form is in the document
-    if id_from_form:
-        id_from_form_clean = id_from_form.replace(' ', '')
-        full_text_clean = full_text.replace(' ', '')
-        
-        if id_from_form_clean not in full_text_clean:
-            print(f"Validation FAILED: ID Number '{id_from_form_clean}' not found.")
-            return {
-                'status': f"Mismatch ❌: ID Number '{id_from_form_clean}' not found in the document.",
-                'validation_passed': False
-            }
+    # Check ID number or Roll number
+    if id_field and id_field not in full_text.replace(' ', ''):
+        return {'doc_type': expected_doc_type,
+                'status': f"Mismatch: ID '{id_field}' not found.",
+                'validation_passed': False}
 
-    # --- 4. If all checks pass ---
-    print("Validation SUCCESSFUL")
-    return {
-        'status': 'Valid ✅: All data matches the document.',
-        'validation_passed': True
-    }
+    # Passed
+    return {'doc_type': expected_doc_type,
+            'status': f"Valid: {expected_doc_type} matches the form data.",
+            'validation_passed': True}
 
 
-# --- Use this block to test your function locally ---
+def validate_multiple_documents(form_data):
+    """
+    Takes multiple document entries and validates each.
+    """
+    results = []
+    documents = form_data.get("documents", [])
+
+    for doc in documents:
+        pdf_path = doc.get("pdf_path")
+        if not pdf_path:
+            results.append({'doc_type': doc.get("doc_type"), 'status': "No file path provided.", 'validation_passed': False})
+            continue
+        result = process_document(pdf_path, doc)
+        results.append(result)
+
+    return results
+
+
+# --- Example usage ---
 if __name__ == '__main__':
-    
-    # Create a test PDF named 'test.pdf' with some text
-    # For example: "This is an Aadhaar Card. Name: John Doe. ID: 12345678"
-    
-    sample_pdf = 'aadhaar.pdf' 
-    sample_form_data = {
-        'name': 'Anushree Kamath',
-        'id_number': '973590859427',
-        'doc_type': 'Aadhaar Card'
+    form_data = {
+        "documents": [
+            {
+                "doc_type": "Aadhaar Card",
+                "pdf_path": "aadhaar.pdf",
+                "name": "Anushree Kamath",
+                "id_number": "973590859427"
+            },
+            {
+                "doc_type": "PAN Card",
+                "pdf_path": "pan.pdf",
+                "name": "Anushree Kamath",
+                "id_number": "MVKPK5101M"
+            },
+            {
+                "doc_type": "Marksheet",
+                "pdf_path": "marksheet.pdf",
+                "name": "Anushree Kamath",
+                "roll_number": "15160071"
+            }
+        ]
     }
-    
-    result = process_document(sample_pdf, sample_form_data)
-    print("\n--- Test Result ---")
-    print(result)
+
+    all_results = validate_multiple_documents(form_data)
+    print("\n--- Final Validation Report ---")
+    for r in all_results:
+        print(f"{r['doc_type']}: {r['status']}")
