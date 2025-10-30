@@ -52,4 +52,7 @@ if __name__ == '__main__':
     # Run the server. 
     # 'debug=True' reloads the server when you save changes.
     # 'host='0.0.0.0'' makes it accessible on your network (optional).
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # app.run(host='0.0.0.0', port=5000, debug=True)
+
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
