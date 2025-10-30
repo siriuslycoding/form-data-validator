@@ -1,10 +1,15 @@
 import os
+import json
 from flask import Flask, request, jsonify
 from validator import validate_multiple_documents
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
+
+# --- TEMP FILE DIRECTORY (IMPORTANT for Render) ---
+UPLOAD_FOLDER = '/tmp'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/')
 def home():
@@ -51,26 +56,39 @@ def home():
 @app.route('/validate', methods=['POST'])
 def validate_multiple():
     results = []
+
+    if not request.files:
+        return jsonify({"error": "No files uploaded."}), 400
     
     # Iterate over all uploaded files
     for key, file in request.files.items():
         if not file:
             continue
         
-        # Each file will have a corresponding metadata key
-        meta_key = f"meta_{key}"
-        form_meta = request.form.get(meta_key)
-        
-        # Convert JSON string to Python dict
-        import json
-        meta = json.loads(form_meta)
-        
-        temp_path = os.path.join(UPLOAD_FOLDER, file.filename)
-        file.save(temp_path)
-        
-        result = process_document(temp_path, meta)
-        os.remove(temp_path)
-        results.append(result)
+        try:
+            # Each file will have a corresponding metadata key
+            meta_key = f"meta_{key}"
+            form_meta = request.form.get(meta_key)
+            
+            # Convert JSON string to Python dict
+            meta = json.loads(form_meta)
+            
+            temp_path = os.path.join(UPLOAD_FOLDER, file.filename)
+            file.save(temp_path)
+            
+            result = validate_multiple_documents(temp_path, meta)
+            os.remove(temp_path)
+            results.append({
+                "file": file.filename,
+                "meta": meta,
+                "result": result
+            })
+        except Exception as e:
+            results.append({
+                "file": file.filename,
+                "error": str(e),
+                "validation_passed": False
+            })
     
     return jsonify({"documents": results})
 
