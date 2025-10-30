@@ -48,14 +48,6 @@ def process_document(pdf_path, form_data):
     expected_doc_type = form_data.get('doc_type', '').lower() # e.g., "aadhar card"
 
     # Validation 1: Check if the document type keyword exists
-    # if expected_doc_type and expected_doc_type not in full_text:
-    #     print(f"Validation FAILED: Document type '{expected_doc_type}' not found.")
-    #     return {
-    #         'status': f"Mismatch ❌: Document does not seem to be an '{expected_doc_type}'.",
-    #         'validation_passed': False
-    #     }
-
-    # Validation 1: Check if the document type keyword exists
     if expected_doc_type == 'aadhaar card':
         # Look for EITHER the English word OR the Hindi word
         if 'aadhaar' not in full_text and 'आधार' not in full_text:
@@ -76,9 +68,7 @@ def process_document(pdf_path, form_data):
         }
 
     # Validation 3: Check if the ID Number from the form is in the document
-    # Validation 3: Check if the ID Number from the form is in the document
     if id_from_form:
-        # Remove all spaces from both strings before comparing
         id_from_form_clean = id_from_form.replace(' ', '')
         full_text_clean = full_text.replace(' ', '')
         

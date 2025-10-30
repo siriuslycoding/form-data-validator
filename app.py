@@ -1,13 +1,14 @@
 import os
 from flask import Flask, request, jsonify
-from validator import process_document # Import your function from the other file
+from validator import process_document
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
-# Create a folder to temporarily store uploads
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+@app.route('/')
+def home():
+    return jsonify({"status": "ok", "message": "Validator API is live"}), 200
 
 @app.route('/validate', methods=['POST'])
 def validate_document_endpoint():
