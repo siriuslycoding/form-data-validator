@@ -1,5 +1,6 @@
 import os
-import json
+import sys
+import logging
 from flask import Flask, request, jsonify
 from validator import validate_multiple_documents
 from flask_cors import CORS
@@ -10,6 +11,11 @@ CORS(app)
 # --- TEMP FILE DIRECTORY (IMPORTANT for Render) ---
 UPLOAD_FOLDER = '/tmp'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# make logs appear reliably in Render
+logging.basicConfig(level=logging.INFO, force=True)
+app.logger.addHandler(logging.StreamHandler(sys.stdout))
+app.logger.setLevel(logging.INFO)
 
 @app.route('/')
 def home():
@@ -53,44 +59,57 @@ def home():
 
 #     return jsonify({'error': 'Something went wrong.'}), 500
 
-@app.route('/validate', methods=['POST'])
-def validate_multiple():
-    results = []
 
-    if not request.files:
-        return jsonify({"error": "No files uploaded."}), 400
-    
-    # Iterate over all uploaded files
-    for key, file in request.files.items():
-        if not file:
-            continue
-        
+@app.route('/validate', methods=['POST'])
+def validate_document_endpoint():
+    app.logger.info("=== /validate hit ===")
+    app.logger.info("Request form keys: %s", list(request.form.keys()))
+    app.logger.info("Request files keys: %s", list(request.files.keys()))
+    sys.stdout.flush()
+
+    # --- 1. Get File and Form Data ---
+    if 'file' not in request.files:
+        app.logger.warning("No 'file' in request.files")
+        sys.stdout.flush()
+        return jsonify({'error': 'No file part in the request.'}), 400
+
+    file = request.files['file']
+    form_data = request.form.to_dict()
+
+    if file.filename == '':
+        app.logger.warning("Empty filename")
+        sys.stdout.flush()
+        return jsonify({'error': 'No file selected.'}), 400
+
+    # --- 2. Save File Temporarily ---
+    temp_filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+    try:
+        file.save(temp_filepath)
+        app.logger.info("Saved temp file: %s", temp_filepath)
+        sys.stdout.flush()
+
+        # --- 3. Call your validator logic ---
         try:
-            # Each file will have a corresponding metadata key
-            meta_key = f"meta_{key}"
-            form_meta = request.form.get(meta_key)
-            
-            # Convert JSON string to Python dict
-            meta = json.loads(form_meta)
-            
-            temp_path = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(temp_path)
-            
-            result = validate_multiple_documents(temp_path, meta)
-            os.remove(temp_path)
-            results.append({
-                "file": file.filename,
-                "meta": meta,
-                "result": result
-            })
+            validation_result = validate_multiple_documents(temp_filepath, form_data)
         except Exception as e:
-            results.append({
-                "file": file.filename,
-                "error": str(e),
-                "validation_passed": False
-            })
-    
-    return jsonify({"documents": results})
+            app.logger.exception("Error during processing")
+            sys.stdout.flush()
+            return jsonify({'error': f"An error occurred during processing: {str(e)}"}), 500
+
+        # --- 4. Clean up and return ---
+        return jsonify(validation_result)
+
+    finally:
+        # Always try to remove the temp file if it exists
+        try:
+            if os.path.exists(temp_filepath):
+                os.remove(temp_filepath)
+                app.logger.info("Deleted temp file: %s", temp_filepath)
+                sys.stdout.flush()
+        except Exception:
+            app.logger.exception("Failed to delete temp file")
+            sys.stdout.flush()
+
 
 if __name__ == '__main__':
     # Run the server. 
