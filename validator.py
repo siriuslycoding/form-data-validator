@@ -13,7 +13,7 @@ def process_document(pdf_path, form_data):
     print(f"\n📄 Processing {form_data.get('doc_type')} for {form_data.get('name')}")
 
     try:
-        images = convert_from_path(pdf_path)
+        images = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=300)
     except Exception as e:
         return {'doc_type': form_data.get('doc_type'),
                 'status': f"Error: Could not read PDF file. {e}",
