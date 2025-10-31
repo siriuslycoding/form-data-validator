@@ -20,4 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Command to run your app
 # CMD ["python", "app.py"]
 EXPOSE 10000
-CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:app"]
+# CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:app"]
+CMD ["gunicorn", "--timeout", "300", "-b", "0.0.0.0:10000", "app:app"]
