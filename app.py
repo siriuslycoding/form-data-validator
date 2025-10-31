@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 from flask import Flask, request, jsonify
-from validator import validate_multiple_documents
+from validator import validate_multiple_documents, process_document
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -90,7 +90,7 @@ def validate_document_endpoint():
 
         # --- 3. Call your validator logic ---
         try:
-            validation_result = validate_multiple_documents(temp_filepath, form_data)
+            validation_result = process_document(temp_filepath, form_data)
         except Exception as e:
             app.logger.exception("Error during processing")
             sys.stdout.flush()
